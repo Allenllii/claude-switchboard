@@ -1,5 +1,9 @@
 # Claude Switchboard
 
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?style=flat-square)
+![PowerShell](https://img.shields.io/badge/PowerShell-7-5391FE?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+
 A Windows GUI for switching **Claude Desktop** between your **official Claude Max account** and **third-party Anthropic-compatible gateways**, with two-way session/project sync and a local usage dashboard.
 
 ![Switch tab](assets/switch.png)
