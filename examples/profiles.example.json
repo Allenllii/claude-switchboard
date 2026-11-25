@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "activeProfileId": "official",
+  "profiles": [
+    {
+      "id": "official",
+      "name": "Claude Max (official sign-in)",
+      "kind": "official",
+      "models": [],
+      "notes": ""
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000000",
+      "name": "Example relay",
+      "kind": "gateway",
+      "baseUrl": "https://relay.example.com",
+      "apiKeyEnc": "",
+      "models": [
+        { "id": "claude-opus-5-5", "label": "Claude Opus 5.5", "tier": "opus", "supports1m": true },
+        { "id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5", "tier": "sonnet", "supports1m": true },
+        { "id": "claude-haiku-5-5", "label": "Claude Haiku 5.5", "tier": "haiku", "supports1m": true },
+        { "id": "claude-fable-5-2", "label": "Claude Fable 5.2", "tier": "fable", "supports1m": true }
+      ],
+      "notes": "Replace apiKeyEnc by adding the profile in the app (DPAPI-encrypted)."
+    }
+  ]
+}

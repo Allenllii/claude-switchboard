@@ -1,0 +1,14 @@
+# Logs and local state
+*.log
+run.log
+.mimosa/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local secrets (never commit real profiles)
+profiles.json
+*.secret
