@@ -19,6 +19,11 @@ supported mechanism into one window and copies the session cards across modes.
 ## Features
 
 - **One-click switch** between the official account and any number of gateway profiles.
+- **Tray-first**: the tray ring is green for the official account and orange for a
+  gateway. Right-click for the profile list, add gateway, open panel and quit; closing
+  the window keeps the app running in the tray.
+- **Compact dark panel** with menu-style profile rows, an active check mark and
+  Switch / Usage / Activity / About tabs.
 - **Gateway profile manager**: name, base URL, API key, model list (id / label / tier / 1M).
 - **API keys encrypted with Windows DPAPI** (per user), stored outside the repo.
 - **Two-way session sync**: `claude-code-sessions/<account>/<org>/local_*.json` and
@@ -108,6 +113,8 @@ contact Anthropic or any gateway, and it does not read your credentials.
 
 - Switching restarts Claude Desktop (a few seconds). The app establishes its model
   client at launch, so an in-place switch is not possible.
+- Closing the main window hides it to the tray. Use the tray menu or About → Quit to
+  exit.
 - One mode at a time. For simultaneous official + gateway windows, use the multi-window
   approach below.
 - The mechanisms rely on undocumented file layouts; a Claude Desktop update may change
@@ -125,7 +132,8 @@ contact Anthropic or any gateway, and it does not read your credentials.
 - [claude-desktop-shared-sessions](https://github.com/Tianqi-Bu/claude-desktop-shared-sessions) —
   hooks that keep the session list in sync across logins.
 
-Claude Switchboard combines the switching idea with the session-copy approach; it is not
+Claude Switchboard combines the switching idea with the session-copy approach; the 0.3
+interface follows the tray-first, dark-dialog style of claude-account-switcher. It is not
 affiliated with Anthropic.
 
 ## License

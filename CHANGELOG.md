@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 — 2026-11-25
+
+- Rebuilt the panel in the visual language of
+  [claude-account-switcher](https://github.com/SnlperStripes/claude-account-switcher):
+  dark palette (`#262624` / `#30302E` / `#D97757`), menu-style profile rows with a
+  green check on the active one, orange primary action, compact 700×540 window.
+- Custom title bar (drag region, minimise / maximise / close) and a four-tab header:
+  Switch, Usage, Activity, About.
+- Tray icon: a ring that is green for the official account and orange for a gateway.
+  Right-click gives a dark menu with the profile list, add-gateway, open console and
+  quit; closing the window now hides it to the tray. Left-click reopens the panel.
+- Activity log moved from a permanent box on the switch page to its own tab; the
+  switch page shows only the latest line.
+- Add/edit gateway dialog rebuilt as a dark 560×680 form with the app icon, dark
+  scrollbars and the orange save button. API keys remain DPAPI-encrypted.
+- Dark DWM title bar and rounded window corners; popup menus use the app palette.
+- Tab pages reset to the top when opened.
+
 ## 0.2.0 — 2026-11-25
 
 - New WPF interface: dark sidebar navigation, profile cards with kind badges and an

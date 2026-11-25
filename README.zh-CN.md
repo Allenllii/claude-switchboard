@@ -16,6 +16,8 @@ Claude Desktop 只在**启动时**读取一次推理连接：
 ## 功能
 
 - 一键在官方账号与任意多个网关配置之间切换
+- **托盘优先**：托盘圆环官方账号为绿色、中转为橙色；右键直接列配置、添加中转、打开面板或退出，关闭窗口后程序留在托盘
+- **紧凑深色面板**：菜单式的配置行、当前项绿色对勾，切换 / 用量 / 活动 / 关于四个页签
 - 网关配置管理：名称、Base URL、API Key、模型列表（id / 显示名 / 档位 / 1M）
 - **API Key 用 Windows DPAPI 加密**，只存在用户目录，不进仓库
 - **双向会话同步**：`claude-code-sessions/<账号>/<org>/local_*.json` 与 `archived-sessions.idx`，较新覆盖较旧
@@ -94,6 +96,7 @@ claude-opus-5-5 | Claude Opus 5.5 | opus | 1m
 ## 限制
 
 - 切换会重启 Claude Desktop（几秒）；应用在启动时建立模型连接，无法原地切换。
+- 关闭主窗口只是收进托盘。退出用托盘菜单，或「关于」页的「退出应用」。
 - 同一时间只能一个模式。需要官方 + 网关**同时**开，请用
   [claude-desktop-multiple-windows-different-api](https://github.com/TonF1917/claude-desktop-multiple-windows-different-api)。
 - 依赖未公开的文件布局，Claude Desktop 升级后可能失效；失败时会明确报错，配置有备份。
@@ -105,7 +108,8 @@ claude-opus-5-5 | Claude Opus 5.5 | opus | 1m
 - [claude-account-switcher](https://github.com/SnlperStripes/claude-account-switcher)
 - [claude-desktop-shared-sessions](https://github.com/Tianqi-Bu/claude-desktop-shared-sessions)
 
-本项目与 Anthropic 无关联。
+0.3 的界面参考了 [claude-account-switcher](https://github.com/SnlperStripes/claude-account-switcher)
+的托盘与深色对话框风格。本项目与 Anthropic 无关联。
 
 ## 许可证
 
