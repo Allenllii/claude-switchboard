@@ -1,8 +1,13 @@
-# Claude Switchboard — GUI for Claude Desktop mode switching, session sync and local usage.
+# Claude Switchboard 0.2 — WPF UI
+# Switch Claude Desktop between the official account and Anthropic-compatible
+# gateways, with two-way session sync and a local usage dashboard.
+#
 # Run with PowerShell 7:  pwsh -File ClaudeSwitchboard.ps1
 
+Add-Type -AssemblyName PresentationFramework
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Security.Cryptography.ProtectedData
 
 $script:Root = $PSScriptRoot
@@ -12,63 +17,501 @@ $script:Root = $PSScriptRoot
 
 $script:ProfilesDoc = Get-ProfilesDoc
 $script:Busy = $false
-$script:LastUsage = $null
+
+$xaml = @'
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Claude Switchboard" Width="1020" Height="700"
+        MinWidth="920" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="#F7F6F2"
+        FontFamily="Segoe UI Variable Text, Microsoft YaHei UI, Segoe UI"
+        FontSize="13" UseLayoutRounding="True">
+  <Window.Resources>
+    <SolidColorBrush x:Key="Ink" Color="#23211D"/>
+    <SolidColorBrush x:Key="Muted" Color="#6F6A60"/>
+    <SolidColorBrush x:Key="Faint" Color="#8A857A"/>
+    <SolidColorBrush x:Key="Line" Color="#E7E3DA"/>
+    <SolidColorBrush x:Key="Accent" Color="#C15F3C"/>
+    <SolidColorBrush x:Key="AccentDark" Color="#A94F30"/>
+    <SolidColorBrush x:Key="Card" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="Sidebar" Color="#201F1C"/>
+    <SolidColorBrush x:Key="SidebarMuted" Color="#A8A296"/>
+
+    <Style x:Key="PrimaryButton" TargetType="Button">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="{StaticResource Accent}"/>
+      <Setter Property="Padding" Value="18,9"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="9"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentDark}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="SecondaryButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+      <Setter Property="Background" Value="{StaticResource Card}"/>
+      <Setter Property="Padding" Value="16,8"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                    BorderBrush="{StaticResource Line}" BorderThickness="1"
+                    CornerRadius="9" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#F2EFE8"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="NavButton" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="#B9B3A6"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Bd" Background="Transparent" CornerRadius="9" Padding="14,10">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#2A2824"/>
+                <Setter Property="Foreground" Value="#F5F2EC"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#34312B"/>
+                <Setter Property="Foreground" Value="#FFFFFF"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="TextBox">
+      <Setter Property="Padding" Value="10,7"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+
+    <Style TargetType="ComboBox">
+      <Setter Property="Padding" Value="8,5"/>
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+    </Style>
+
+    <Style x:Key="CardBorder" TargetType="Border">
+      <Setter Property="Background" Value="{StaticResource Card}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="12"/>
+      <Setter Property="Padding" Value="18,14"/>
+    </Style>
+
+    <Style x:Key="ProfileItem" TargetType="ListBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="Bd" Background="{StaticResource Card}"
+                    BorderBrush="{StaticResource Line}" BorderThickness="1"
+                    CornerRadius="11" Padding="16,12" Margin="0,0,0,8" Cursor="Hand">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#D8D2C6"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                <Setter TargetName="Bd" Property="Background" Value="#FFF8F3"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="DataGrid">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="GridLinesVisibility" Value="None"/>
+      <Setter Property="HeadersVisibility" Value="Column"/>
+      <Setter Property="RowHeight" Value="30"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="CanUserAddRows" Value="False"/>
+      <Setter Property="IsReadOnly" Value="True"/>
+      <Setter Property="AlternatingRowBackground" Value="#FBFAF7"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="220"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+
+    <!-- sidebar -->
+    <Border Grid.Column="0" Background="{StaticResource Sidebar}">
+      <DockPanel Margin="16,20,16,18">
+        <StackPanel DockPanel.Dock="Top">
+          <TextBlock Text="Claude" Foreground="#F5F2EC" FontSize="19" FontWeight="SemiBold"/>
+          <TextBlock Text="Switchboard" Foreground="{StaticResource SidebarMuted}" FontSize="13" Margin="0,1,0,0"/>
+          <StackPanel Margin="0,28,0,0">
+            <RadioButton x:Name="NavSwitch" Style="{StaticResource NavButton}" Content="Switch" IsChecked="True"/>
+            <RadioButton x:Name="NavUsage" Style="{StaticResource NavButton}" Content="Usage"/>
+            <RadioButton x:Name="NavAbout" Style="{StaticResource NavButton}" Content="About"/>
+          </StackPanel>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Bottom" Text="v0.2.0 · local only" Foreground="#7C766B" FontSize="11"/>
+      </DockPanel>
+    </Border>
+
+    <!-- content -->
+    <Grid Grid.Column="1" Margin="30,24,30,24">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+
+      <Grid Grid.Row="0" Margin="0,0,0,18">
+        <StackPanel>
+          <TextBlock x:Name="PageTitle" Text="Switch profile" FontSize="25" FontWeight="SemiBold"
+                     Foreground="{StaticResource Ink}"/>
+          <TextBlock x:Name="PageSubtitle" Margin="0,4,0,0" Foreground="{StaticResource Muted}"
+                     Text="Choose the account or gateway Claude Desktop should use."/>
+        </StackPanel>
+        <Border HorizontalAlignment="Right" VerticalAlignment="Top" CornerRadius="14" Padding="14,7"
+                Background="#FFF1E8">
+          <StackPanel Orientation="Horizontal">
+            <Ellipse x:Name="ModeDot" Width="8" Height="8" Fill="{StaticResource Accent}"
+                     VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock x:Name="ModeText" Text="BirdAPI gateway" Foreground="#8A3B1E" FontWeight="SemiBold"/>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <Grid Grid.Row="1">
+        <!-- ===== Switch page ===== -->
+        <Grid x:Name="PageSwitch">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="170"/>
+          </Grid.RowDefinitions>
+
+          <Border Grid.Row="0" Style="{StaticResource CardBorder}">
+            <Grid>
+              <StackPanel>
+                <TextBlock Text="CURRENT MODE" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{StaticResource Faint}"/>
+                <TextBlock x:Name="CurrentMode" Text="BirdAPI gateway" FontSize="19" FontWeight="SemiBold"
+                           Foreground="{StaticResource Ink}" Margin="0,5,0,0"/>
+                <TextBlock x:Name="SessionInfo" Text="sessions: official 0 · gateway 0"
+                           Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
+              </StackPanel>
+              <Button x:Name="BtnOpen" Content="Open Claude" Style="{StaticResource SecondaryButton}"
+                      HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            </Grid>
+          </Border>
+
+          <ListBox x:Name="ProfileList" Grid.Row="1" Margin="0,14,0,0" Background="Transparent"
+                   BorderThickness="0" ItemContainerStyle="{StaticResource ProfileItem}"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{StaticResource Ink}"/>
+                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{StaticResource Muted}"
+                               Margin="0,3,0,0"/>
+                  </StackPanel>
+                  <Border x:Name="Badge" Grid.Column="1" Background="#E8F0FE" CornerRadius="9"
+                          Padding="9,3" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <TextBlock x:Name="BadgeText" Text="{Binding KindLabel}" FontSize="10"
+                               FontWeight="SemiBold" Foreground="#1E4FA8"/>
+                  </Border>
+                  <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <TextBlock Text="{Binding ActiveLabel}" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource Accent}" HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding ModelsLabel}" FontSize="11"
+                               Foreground="{StaticResource Faint}" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                  </StackPanel>
+                </Grid>
+                <DataTemplate.Triggers>
+                  <DataTrigger Binding="{Binding Kind}" Value="official">
+                    <Setter TargetName="Badge" Property="Background" Value="#FDF0E4"/>
+                    <Setter TargetName="BadgeText" Property="Foreground" Value="#8A3B1E"/>
+                  </DataTrigger>
+                </DataTemplate.Triggers>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0">
+            <Button x:Name="BtnSwitch" Content="Switch to selected" Style="{StaticResource PrimaryButton}"
+                    MinWidth="180"/>
+            <Button x:Name="BtnAdd" Content="Add gateway…" Style="{StaticResource SecondaryButton}"
+                    Margin="10,0,0,0"/>
+            <Button x:Name="BtnEdit" Content="Edit…" Style="{StaticResource SecondaryButton}"
+                    Margin="8,0,0,0"/>
+            <Button x:Name="BtnRemove" Content="Remove" Style="{StaticResource SecondaryButton}"
+                    Margin="8,0,0,0"/>
+          </StackPanel>
+
+          <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,14,0,0">
+            <CheckBox x:Name="ChkSync" Content="Sync sessions and projects" IsChecked="True"
+                      Foreground="{StaticResource Ink}" Margin="0,0,22,0"/>
+            <CheckBox x:Name="ChkCode" Content="Show Code sidebar" IsChecked="True"
+                      Foreground="{StaticResource Ink}"/>
+          </StackPanel>
+
+          <Border Grid.Row="4" Margin="0,14,0,0" Background="{StaticResource Sidebar}" CornerRadius="10"
+                  Padding="14,10">
+            <TextBox x:Name="LogBox" Background="Transparent" Foreground="#D8D3C8"
+                     BorderThickness="0" IsReadOnly="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI" FontSize="11"/>
+          </Border>
+        </Grid>
+
+        <!-- ===== Usage page ===== -->
+        <Grid x:Name="PageUsage" Visibility="Collapsed">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+
+          <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <TextBlock Text="Range" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
+            <ComboBox x:Name="CboDays" Width="90" Margin="10,0,0,0" SelectedIndex="0">
+              <ComboBoxItem Content="7"/>
+              <ComboBoxItem Content="30"/>
+            </ComboBox>
+            <Button x:Name="BtnRefresh" Content="Refresh" Style="{StaticResource SecondaryButton}"
+                    Margin="10,0,0,0"/>
+            <TextBlock x:Name="UsageStatus" Text="Not scanned yet." VerticalAlignment="Center"
+                       Margin="14,0,0,0" Foreground="{StaticResource Faint}" FontSize="12"/>
+          </StackPanel>
+
+          <UniformGrid Grid.Row="1" Columns="4" Margin="0,16,0,0">
+            <Border Style="{StaticResource CardBorder}" Margin="0,0,10,0">
+              <StackPanel>
+                <TextBlock Text="MESSAGES" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{StaticResource Faint}"/>
+                <TextBlock x:Name="SumMessages" Text="—" FontSize="22" FontWeight="SemiBold"
+                           Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardBorder}" Margin="0,0,10,0">
+              <StackPanel>
+                <TextBlock Text="EST. COST" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{StaticResource Faint}"/>
+                <TextBlock x:Name="SumCost" Text="—" FontSize="22" FontWeight="SemiBold"
+                           Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardBorder}" Margin="0,0,10,0">
+              <StackPanel>
+                <TextBlock Text="INPUT" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{StaticResource Faint}"/>
+                <TextBlock x:Name="SumInput" Text="—" FontSize="22" FontWeight="SemiBold"
+                           Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardBorder}">
+              <StackPanel>
+                <TextBlock Text="OUTPUT" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{StaticResource Faint}"/>
+                <TextBlock x:Name="SumOutput" Text="—" FontSize="22" FontWeight="SemiBold"
+                           Foreground="{StaticResource Ink}" Margin="0,4,0,0"/>
+              </StackPanel>
+            </Border>
+          </UniformGrid>
+
+          <Grid Grid.Row="2" Margin="0,16,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Text="By model" FontWeight="SemiBold" Foreground="{StaticResource Ink}"
+                       Margin="2,0,0,6"/>
+            <DataGrid x:Name="GridModels" Grid.Row="1" AutoGenerateColumns="False">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Model" Binding="{Binding Model}" Width="*"/>
+                <DataGridTextColumn Header="Messages" Binding="{Binding Messages}" Width="100"/>
+                <DataGridTextColumn Header="Input" Binding="{Binding Input}" Width="110"/>
+                <DataGridTextColumn Header="Output" Binding="{Binding Output}" Width="110"/>
+                <DataGridTextColumn Header="Est. cost" Binding="{Binding Cost}" Width="110"/>
+              </DataGrid.Columns>
+            </DataGrid>
+            <TextBlock Grid.Row="2" Text="By project" FontWeight="SemiBold" Foreground="{StaticResource Ink}"
+                       Margin="2,14,0,6"/>
+            <DataGrid x:Name="GridProjects" Grid.Row="3" AutoGenerateColumns="False">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Project" Binding="{Binding Project}" Width="*"/>
+                <DataGridTextColumn Header="Messages" Binding="{Binding Messages}" Width="100"/>
+                <DataGridTextColumn Header="Input" Binding="{Binding Input}" Width="110"/>
+                <DataGridTextColumn Header="Output" Binding="{Binding Output}" Width="110"/>
+                <DataGridTextColumn Header="Est. cost" Binding="{Binding Cost}" Width="110"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </Grid>
+        </Grid>
+
+        <!-- ===== About page ===== -->
+        <ScrollViewer x:Name="PageAbout" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+          <Border Style="{StaticResource CardBorder}" Padding="26,22">
+            <StackPanel>
+              <TextBlock Text="Claude Switchboard" FontSize="20" FontWeight="SemiBold"
+                         Foreground="{StaticResource Ink}"/>
+              <TextBlock x:Name="AboutVersion" Text="v0.2.0" Foreground="{StaticResource Faint}"
+                         Margin="0,3,0,18"/>
+              <TextBlock x:Name="AboutText" TextWrapping="Wrap" Foreground="{StaticResource Muted}"
+                         LineHeight="21"/>
+            </StackPanel>
+          </Border>
+        </ScrollViewer>
+      </Grid>
+    </Grid>
+  </Grid>
+</Window>
+'@
+
+$script:Window = [Windows.Markup.XamlReader]::Parse($xaml)
+
+# ---- control bindings ----
+foreach ($name in @(
+    'NavSwitch','NavUsage','NavAbout','PageSwitch','PageUsage','PageAbout',
+    'PageTitle','PageSubtitle','ModeDot','ModeText','CurrentMode','SessionInfo',
+    'ProfileList','BtnSwitch','BtnAdd','BtnEdit','BtnRemove','BtnOpen',
+    'ChkSync','ChkCode','LogBox','CboDays','BtnRefresh','UsageStatus',
+    'SumMessages','SumCost','SumInput','SumOutput','GridModels','GridProjects',
+    'AboutText','AboutVersion')) {
+    Set-Variable -Name "ui$name" -Value $script:Window.FindName($name) -Scope Script
+}
 
 # ---------------- helpers ----------------
 function Write-Log([string]$msg) {
     $line = "[{0}] {1}" -f ([DateTime]::Now.ToString('HH:mm:ss')), $msg
-    $script:logBox.AppendText($line + "`r`n")
-    $script:logBox.SelectionStart = $script:logBox.TextLength
-    $script:logBox.ScrollToCaret()
-    [System.Windows.Forms.Application]::DoEvents()
+    $script:uiLogBox.AppendText($line + "`r`n")
+    $script:uiLogBox.ScrollToEnd()
 }
 
-function Get-SelectedProfile {
-    if ($script:profileList.SelectedItems.Count -eq 0) { return $null }
-    $id = $script:profileList.SelectedItems[0].Tag
-    return Get-ProfileById $script:ProfilesDoc $id
+function Set-Page([string]$page) {
+    $script:uiPageSwitch.Visibility = if ($page -eq 'switch') { 'Visible' } else { 'Collapsed' }
+    $script:uiPageUsage.Visibility = if ($page -eq 'usage') { 'Visible' } else { 'Collapsed' }
+    $script:uiPageAbout.Visibility = if ($page -eq 'about') { 'Visible' } else { 'Collapsed' }
+    $script:uiNavSwitch.IsChecked = ($page -eq 'switch')
+    $script:uiNavUsage.IsChecked = ($page -eq 'usage')
+    $script:uiNavAbout.IsChecked = ($page -eq 'about')
+    switch ($page) {
+        'switch' { $script:uiPageTitle.Text = 'Switch profile'; $script:uiPageSubtitle.Text = 'Choose the account or gateway Claude Desktop should use.' }
+        'usage'  { $script:uiPageTitle.Text = 'Usage'; $script:uiPageSubtitle.Text = 'Local token accounting from Claude Code transcripts.' }
+        'about'  { $script:uiPageTitle.Text = 'About'; $script:uiPageSubtitle.Text = 'How switching works and where data lives.' }
+    }
 }
 
-function Update-Status {
+function Update-ModeStatus {
     $mode = Get-CurrentDeploymentMode
     $counts = Get-SessionCounts
     $label = switch ($mode) {
         'official' { 'Official Claude Max' }
         'gateway'  { 'BirdAPI gateway' }
-        default    { 'Unknown / chooser' }
+        default    { 'Unknown' }
     }
-    $script:statusLabel.Text = "Current: $label   |   sessions: official $($counts.Official), gateway $($counts.Gateway)"
-    $script:statusLabel.ForeColor = if ($mode -eq 'official') {
-        [System.Drawing.Color]::FromArgb(180, 95, 6)
+    $script:uiCurrentMode.Text = $label
+    $script:uiModeText.Text = $label
+    $script:uiSessionInfo.Text = ("sessions: official {0} · gateway {1}" -f $counts.Official, $counts.Gateway)
+    if ($mode -eq 'official') {
+        $script:uiModeDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#C15F3C')
+        $script:uiModeText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#8A3B1E')
     } else {
-        [System.Drawing.Color]::FromArgb(37, 99, 235)
+        $script:uiModeDot.Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#2F6FEB')
+        $script:uiModeText.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#1E4FA8')
     }
 }
 
-function Refresh-ProfileList {
-    $script:ProfilesDoc = Get-ProfilesDoc
-    $script:profileList.BeginUpdate()
-    $script:profileList.Items.Clear()
-    foreach ($p in @($script:ProfilesDoc.profiles)) {
-        $kind = if ($p.kind -eq 'official') { 'official' } else { 'gateway' }
-        $models = if ($p.kind -eq 'official') { '-' } else { (@($p.models).Count.ToString() + ' models') }
-        $item = New-Object System.Windows.Forms.ListViewItem($p.name)
-        [void]$item.SubItems.Add($kind)
-        [void]$item.SubItems.Add($models)
-        $item.Tag = $p.id
-        if ($p.id -eq $script:ProfilesDoc.activeProfileId) { $item.BackColor = [System.Drawing.Color]::FromArgb(235, 244, 255) }
-        [void]$script:profileList.Items.Add($item)
-    }
-    $script:profileList.EndUpdate()
-    Update-Status
+function Get-SelectedProfile {
+    $item = $script:uiProfileList.SelectedItem
+    if (-not $item) { return $null }
+    return Get-ProfileById $script:ProfilesDoc $item.Id
 }
 
 function Set-Busy([bool]$value) {
     $script:Busy = $value
-    foreach ($b in @($script:btnSwitch, $script:btnAdd, $script:btnEdit, $script:btnRemove, $script:btnOpen)) {
-        $b.Enabled = -not $value
+    foreach ($b in @($script:uiBtnSwitch, $script:uiBtnAdd, $script:uiBtnEdit, $script:uiBtnRemove, $script:uiBtnOpen)) {
+        $b.IsEnabled = -not $value
     }
     [System.Windows.Forms.Application]::DoEvents()
+}
+
+function Refresh-ProfileList {
+    $script:ProfilesDoc = Get-ProfilesDoc
+    $items = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
+    foreach ($p in @($script:ProfilesDoc.profiles)) {
+        $isActive = ($p.id -eq $script:ProfilesDoc.activeProfileId)
+        $items.Add([pscustomobject]@{
+            Id          = $p.id
+            Name        = $p.name
+            Kind        = $p.kind
+            KindLabel   = if ($p.kind -eq 'official') { 'OFFICIAL' } else { 'GATEWAY' }
+            Subtitle    = if ($p.kind -eq 'official') { 'claude.ai sign-in · OAuth token cache' } else { [string]$p.baseUrl }
+            ModelsLabel = if ($p.kind -eq 'official') { '' } else { (@($p.models).Count.ToString() + ' models') }
+            ActiveLabel = if ($isActive) { '● Active' } else { '' }
+        }) | Out-Null
+    }
+    $script:uiProfileList.ItemsSource = $items
+    foreach ($it in $items) {
+        if ($it.Id -eq $script:ProfilesDoc.activeProfileId) { $script:uiProfileList.SelectedItem = $it; break }
+    }
+    if (-not $script:uiProfileList.SelectedItem -and $items.Count -gt 0) {
+        $script:uiProfileList.SelectedIndex = 0
+    }
+    Update-ModeStatus
 }
 
 function Invoke-SwitchTo($profile) {
@@ -82,13 +525,12 @@ function Invoke-SwitchTo($profile) {
     Set-Busy $true
     try {
         Invoke-ClaudeSwitch -Profile $profile -PlainKey $key `
-            -SyncSessions ([bool]$script:chkSync.Checked) `
-            -CodeSidebar ([bool]$script:chkCode.Checked) `
+            -SyncSessions ([bool]$script:uiChkSync.IsChecked) `
+            -CodeSidebar ([bool]$script:uiChkCode.IsChecked) `
             -Log { param($m) Write-Log $m }
         Set-ActiveProfile $profile.id
         $script:ProfilesDoc = Get-ProfilesDoc
         Write-Log 'Done.'
-        Start-Sleep -Seconds 2
     } catch {
         Write-Log ('ERROR: ' + $_.Exception.Message)
     } finally {
@@ -97,388 +539,220 @@ function Invoke-SwitchTo($profile) {
     }
 }
 
+function New-LabeledField([string]$label, [string]$value, [bool]$multiline = $false) {
+    $sp = New-Object System.Windows.Controls.StackPanel
+    $sp.Margin = New-Object System.Windows.Thickness(0, 0, 0, 12)
+    $lbl = New-Object System.Windows.Controls.TextBlock
+    $lbl.Text = $label
+    $lbl.FontSize = 11
+    $lbl.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#6F6A60')
+    $lbl.Margin = New-Object System.Windows.Thickness(0, 0, 0, 5)
+    $tb = New-Object System.Windows.Controls.TextBox
+    $tb.Text = $value
+    $tb.Padding = New-Object System.Windows.Thickness(9, 7, 9, 7)
+    if ($multiline) {
+        $tb.AcceptsReturn = $true
+        $tb.TextWrapping = 'NoWrap'
+        $tb.VerticalScrollBarVisibility = 'Auto'
+        $tb.Height = 190
+        $tb.FontFamily = New-Object System.Windows.Media.FontFamily('Cascadia Mono, Consolas')
+        $tb.FontSize = 11
+    }
+    $sp.Children.Add($lbl) | Out-Null
+    $sp.Children.Add($tb) | Out-Null
+    return [pscustomobject]@{ Panel = $sp; Box = $tb }
+}
+
 function Show-ProfileDialog($existing) {
-    $dlg = New-Object System.Windows.Forms.Form
-    $dlg.Text = if ($existing) { 'Edit gateway profile' } else { 'Add gateway profile' }
-    $dlg.Size = New-Object System.Drawing.Size(560, 520)
-    $dlg.StartPosition = 'CenterParent'
-    $dlg.FormBorderStyle = 'FixedDialog'
-    $dlg.MaximizeBox = $false
-    $dlg.MinimizeBox = $false
-    $dlg.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
+    $dlg = New-Object System.Windows.Window
+    $dlg.Title = if ($existing) { 'Edit gateway profile' } else { 'Add gateway profile' }
+    $dlg.Width = 620
+    $dlg.Height = 720
+    $dlg.WindowStartupLocation = 'CenterOwner'
+    $dlg.Owner = $script:Window
+    $dlg.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#F7F6F2')
 
-    function Add-Field([string]$label, [int]$y, [int]$height = 27) {
-        $l = New-Object System.Windows.Forms.Label
-        $l.Text = $label
-        $l.Location = New-Object System.Drawing.Point(18, $y)
-        $l.Size = New-Object System.Drawing.Size(110, 22)
-        $dlg.Controls.Add($l)
-        $t = New-Object System.Windows.Forms.TextBox
-        $t.Location = New-Object System.Drawing.Point(132, $y)
-        $t.Size = New-Object System.Drawing.Size(400, $height)
-        $dlg.Controls.Add($t)
-        return $t
-    }
+    $root = New-Object System.Windows.Controls.Grid
+    $root.Margin = New-Object System.Windows.Thickness(24, 20, 24, 18)
+    $r0 = New-Object System.Windows.Controls.RowDefinition
+    $r0.Height = [System.Windows.GridLength]::Auto
+    $r1 = New-Object System.Windows.Controls.RowDefinition
+    $r1.Height = New-Object System.Windows.GridLength(1, [System.Windows.GridUnitType]::Star)
+    $r2 = New-Object System.Windows.Controls.RowDefinition
+    $r2.Height = [System.Windows.GridLength]::Auto
+    $root.RowDefinitions.Add($r0) | Out-Null
+    $root.RowDefinitions.Add($r1) | Out-Null
+    $root.RowDefinitions.Add($r2) | Out-Null
 
-    $txtName = Add-Field 'Name' 16
-    $txtUrl = Add-Field 'Base URL' 52
-    $txtKey = Add-Field 'API key' 88
-    $txtKey.UseSystemPasswordChar = $true
+    $scroll = New-Object System.Windows.Controls.ScrollViewer
+    $scroll.VerticalScrollBarVisibility = 'Auto'
+    $panel = New-Object System.Windows.Controls.StackPanel
+    $scroll.Content = $panel
+    [System.Windows.Controls.Grid]::SetRow($scroll, 1)
+    $root.Children.Add($scroll) | Out-Null
 
-    $lblModels = New-Object System.Windows.Forms.Label
-    $lblModels.Text = "Models (one per line: id | label | opus/sonnet/haiku/fable | 1m)"
-    $lblModels.Location = New-Object System.Drawing.Point(18, 126)
-    $lblModels.Size = New-Object System.Drawing.Size(520, 20)
-    $dlg.Controls.Add($lblModels)
+    $fName = New-LabeledField 'Name' $(if ($existing) { $existing.name } else { '' })
+    $fUrl = New-LabeledField 'Base URL' $(if ($existing) { $existing.baseUrl } else { 'https://' })
+    $fKey = New-LabeledField 'API key' ''
+    if ($existing) { $fKey.Box.ToolTip = 'Leave empty to keep the current key' }
+    $fModels = New-LabeledField 'Models — one per line: id | label | opus/sonnet/haiku/fable' `
+        $(if ($existing) { ConvertTo-ModelText $existing.models } else { ConvertTo-ModelText (Get-DefaultClaudeModels) }) $true
+    $fNotes = New-LabeledField 'Notes (optional)' $(if ($existing) { $existing.notes } else { '' })
 
-    $txtModels = New-Object System.Windows.Forms.TextBox
-    $txtModels.Multiline = $true
-    $txtModels.ScrollBars = 'Vertical'
-    $txtModels.Location = New-Object System.Drawing.Point(18, 148)
-    $txtModels.Size = New-Object System.Drawing.Size(514, 250)
-    $txtModels.Font = New-Object System.Drawing.Font('Consolas', 9)
-    $dlg.Controls.Add($txtModels)
+    foreach ($f in @($fName, $fUrl, $fKey, $fModels, $fNotes)) { $panel.Children.Add($f.Panel) | Out-Null }
 
-    $txtNotes = Add-Field 'Notes' 410
-    $txtNotes.Size = New-Object System.Drawing.Size(400, 27)
+    $buttons = New-Object System.Windows.Controls.StackPanel
+    $buttons.Orientation = 'Horizontal'
+    $buttons.HorizontalAlignment = 'Right'
+    $buttons.Margin = New-Object System.Windows.Thickness(0, 12, 0, 0)
+    [System.Windows.Controls.Grid]::SetRow($buttons, 2)
 
-    $ok = New-Object System.Windows.Forms.Button
-    $ok.Text = 'Save'
-    $ok.Location = New-Object System.Drawing.Point(338, 448)
-    $ok.Size = New-Object System.Drawing.Size(90, 28)
-    $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
-    $dlg.Controls.Add($ok)
+    $ok = New-Object System.Windows.Controls.Button
+    $ok.Content = 'Save'
+    $ok.Padding = New-Object System.Windows.Thickness(22, 9, 22, 9)
+    $ok.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#C15F3C')
+    $ok.Foreground = [System.Windows.Media.Brushes]::White
+    $ok.BorderThickness = New-Object System.Windows.Thickness(0)
+    $ok.Cursor = 'Hand'
+    $cancel = New-Object System.Windows.Controls.Button
+    $cancel.Content = 'Cancel'
+    $cancel.Padding = New-Object System.Windows.Thickness(20, 9, 20, 9)
+    $cancel.Margin = New-Object System.Windows.Thickness(10, 0, 0, 0)
+    $cancel.Cursor = 'Hand'
+    $buttons.Children.Add($ok) | Out-Null
+    $buttons.Children.Add($cancel) | Out-Null
+    $root.Children.Add($buttons) | Out-Null
+    $dlg.Content = $root
 
-    $cancel = New-Object System.Windows.Forms.Button
-    $cancel.Text = 'Cancel'
-    $cancel.Location = New-Object System.Drawing.Point(438, 448)
-    $cancel.Size = New-Object System.Drawing.Size(90, 28)
-    $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-    $dlg.Controls.Add($cancel)
-    $dlg.AcceptButton = $ok
-    $dlg.CancelButton = $cancel
+    $cancel.Add_Click({ $dlg.DialogResult = $false; $dlg.Close() })
+    $ok.Add_Click({
+        if (-not $fName.Box.Text.Trim() -or -not $fUrl.Box.Text.Trim()) {
+            [System.Windows.MessageBox]::Show('Name and Base URL are required.')
+            return
+        }
+        if (-not $existing -and -not $fKey.Box.Text.Trim()) {
+            [System.Windows.MessageBox]::Show('An API key is required for a gateway profile.')
+            return
+        }
+        $models = ConvertFrom-ModelText $fModels.Box.Text
+        if ($existing) {
+            Update-GatewayProfile -Profile $existing -Name $fName.Box.Text.Trim() `
+                -BaseUrl $fUrl.Box.Text.Trim() -ApiKey $fKey.Box.Text -Models $models `
+                -Notes $fNotes.Box.Text | Out-Null
+            Write-Log ('Updated profile: ' + $fName.Box.Text.Trim())
+        } else {
+            Add-GatewayProfile -Name $fName.Box.Text.Trim() -BaseUrl $fUrl.Box.Text.Trim() `
+                -ApiKey $fKey.Box.Text -Models $models -Notes $fNotes.Box.Text | Out-Null
+            Write-Log ('Added profile: ' + $fName.Box.Text.Trim())
+        }
+        $dlg.DialogResult = $true
+        $dlg.Close()
+    })
 
-    if ($existing) {
-        $txtName.Text = $existing.name
-        $txtUrl.Text = $existing.baseUrl
-        $txtModels.Text = ConvertTo-ModelText $existing.models
-        $txtNotes.Text = $existing.notes
-        $txtKey.Text = ''
-        $txtKey.PlaceholderText = '(unchanged)'
-    } else {
-        $txtUrl.Text = 'https://'
-        $txtModels.Text = ConvertTo-ModelText (Get-DefaultClaudeModels)
-    }
-
-    if ($dlg.ShowDialog($script:form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
-
-    $models = ConvertFrom-ModelText $txtModels.Text
-    if (-not $txtName.Text.Trim() -or -not $txtUrl.Text.Trim()) {
-        [System.Windows.Forms.MessageBox]::Show('Name and Base URL are required.', 'Claude Switchboard')
-        return
-    }
-    if (-not $existing -and -not $txtKey.Text.Trim()) {
-        [System.Windows.Forms.MessageBox]::Show('An API key is required for a gateway profile.', 'Claude Switchboard')
-        return
-    }
-    if ($existing) {
-        Update-GatewayProfile -Profile $existing -Name $txtName.Text.Trim() -BaseUrl $txtUrl.Text.Trim() `
-            -ApiKey $txtKey.Text -Models $models -Notes $txtNotes.Text | Out-Null
-        Write-Log ('Updated profile: ' + $txtName.Text.Trim())
-    } else {
-        Add-GatewayProfile -Name $txtName.Text.Trim() -BaseUrl $txtUrl.Text.Trim() `
-            -ApiKey $txtKey.Text -Models $models -Notes $txtNotes.Text | Out-Null
-        Write-Log ('Added profile: ' + $txtName.Text.Trim())
-    }
+    [void]$dlg.ShowDialog()
     Refresh-ProfileList
 }
 
 function Refresh-Usage {
     if ($script:Busy) { return }
     $script:Busy = $true
-    $script:btnRefreshUsage.Enabled = $false
-    $days = [int]$script:cboDays.SelectedItem
-    $script:usageStatus.Text = 'Scanning transcripts...'
+    $script:uiBtnRefresh.IsEnabled = $false
+    $days = [int]$script:uiCboDays.SelectedItem.Content
+    $script:uiUsageStatus.Text = 'Scanning transcripts…'
     [System.Windows.Forms.Application]::DoEvents()
     try {
         $u = Get-ClaudeUsage -Days $days -Progress {
             param($done, $total, $file)
-            $script:usageStatus.Text = "Scanning $done/$total"
+            $script:uiUsageStatus.Text = "Scanning $done/$total"
             [System.Windows.Forms.Application]::DoEvents()
         }
-        $script:LastUsage = $u
         if (-not $u.Available) {
-            $script:usageStatus.Text = "No transcripts found at $($u.Root)"
+            $script:uiUsageStatus.Text = "No transcripts at $($u.Root)"
             return
         }
-        $script:usageSummary.Text = ("Last {0} days   |   {1} messages   |   in {2}   out {3}   cache read {4}   cache write {5}   |   est. `${6:N2}" -f `
-            $u.Days, $u.Messages, (Format-Tokens $u.Input), (Format-Tokens $u.Output),
-            (Format-Tokens $u.CacheRead), (Format-Tokens $u.CacheWrite), $u.Cost)
+        $script:uiSumMessages.Text = [string]$u.Messages
+        $script:uiSumCost.Text = ('${0:N2}' -f $u.Cost)
+        $script:uiSumInput.Text = (Format-Tokens $u.Input)
+        $script:uiSumOutput.Text = (Format-Tokens $u.Output)
+        $script:uiUsageStatus.Text = ('Scanned {0} · cache read {1} · cache write {2}' -f `
+            $u.ScannedAt.ToString('HH:mm:ss'), (Format-Tokens $u.CacheRead), (Format-Tokens $u.CacheWrite))
 
-        $script:lvModels.BeginUpdate(); $script:lvModels.Items.Clear()
+        $mItems = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
         foreach ($m in $u.ByModel) {
-            $it = New-Object System.Windows.Forms.ListViewItem($m.Model)
-            [void]$it.SubItems.Add([string]$m.Messages)
-            [void]$it.SubItems.Add((Format-Tokens $m.Input))
-            [void]$it.SubItems.Add((Format-Tokens $m.Output))
-            [void]$it.SubItems.Add(('{0:N2}' -f $m.Cost))
-            [void]$script:lvModels.Items.Add($it)
+            $mItems.Add([pscustomobject]@{
+                Model = $m.Model; Messages = $m.Messages
+                Input = (Format-Tokens $m.Input); Output = (Format-Tokens $m.Output)
+                Cost = ('${0:N2}' -f $m.Cost)
+            }) | Out-Null
         }
-        $script:lvModels.EndUpdate()
+        $script:uiGridModels.ItemsSource = $mItems
 
-        $script:lvProjects.BeginUpdate(); $script:lvProjects.Items.Clear()
+        $pItems = New-Object 'System.Collections.ObjectModel.ObservableCollection[object]'
         foreach ($p in $u.ByProject) {
-            $it = New-Object System.Windows.Forms.ListViewItem($p.Project)
-            [void]$it.SubItems.Add([string]$p.Messages)
-            [void]$it.SubItems.Add((Format-Tokens $p.Input))
-            [void]$it.SubItems.Add((Format-Tokens $p.Output))
-            [void]$it.SubItems.Add(('{0:N2}' -f $p.Cost))
-            [void]$script:lvProjects.Items.Add($it)
+            $pItems.Add([pscustomobject]@{
+                Project = $p.Project; Messages = $p.Messages
+                Input = (Format-Tokens $p.Input); Output = (Format-Tokens $p.Output)
+                Cost = ('${0:N2}' -f $p.Cost)
+            }) | Out-Null
         }
-        $script:lvProjects.EndUpdate()
-
-        $script:usageStatus.Text = ('Scanned {0} at {1}' -f $u.Root, $u.ScannedAt.ToString('HH:mm:ss'))
+        $script:uiGridProjects.ItemsSource = $pItems
     } catch {
-        $script:usageStatus.Text = 'ERROR: ' + $_.Exception.Message
+        $script:uiUsageStatus.Text = 'ERROR: ' + $_.Exception.Message
     } finally {
         $script:Busy = $false
-        $script:btnRefreshUsage.Enabled = $true
+        $script:uiBtnRefresh.IsEnabled = $true
     }
 }
 
-# ---------------- form ----------------
-$script:form = New-Object System.Windows.Forms.Form
-$script:form.Text = 'Claude Switchboard'
-$script:form.Size = New-Object System.Drawing.Size(880, 640)
-$script:form.StartPosition = 'CenterScreen'
-$script:form.MinimumSize = New-Object System.Drawing.Size(780, 560)
-$script:form.BackColor = [System.Drawing.Color]::FromArgb(250, 249, 246)
-$script:form.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
-
-$tabs = New-Object System.Windows.Forms.TabControl
-$tabs.Dock = 'Fill'
-$tabs.Padding = New-Object System.Drawing.Point(14, 6)
-$script:form.Controls.Add($tabs)
-
-# --- Tab 1: switch ---
-$tabSwitch = New-Object System.Windows.Forms.TabPage
-$tabSwitch.Text = 'Switch'
-$tabSwitch.BackColor = [System.Drawing.Color]::FromArgb(250, 249, 246)
-$tabs.TabPages.Add($tabSwitch)
-
-$script:statusLabel = New-Object System.Windows.Forms.Label
-$script:statusLabel.Location = New-Object System.Drawing.Point(16, 12)
-$script:statusLabel.Size = New-Object System.Drawing.Size(820, 24)
-$script:statusLabel.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 10, [System.Drawing.FontStyle]::Bold)
-$tabSwitch.Controls.Add($script:statusLabel)
-
-$script:profileList = New-Object System.Windows.Forms.ListView
-$script:profileList.Location = New-Object System.Drawing.Point(16, 44)
-$script:profileList.Size = New-Object System.Drawing.Size(560, 210)
-$script:profileList.View = 'Details'
-$script:profileList.FullRowSelect = $true
-$script:profileList.MultiSelect = $false
-$script:profileList.HideSelection = $false
-$script:profileList.Columns.Add('Profile', 300) | Out-Null
-$script:profileList.Columns.Add('Kind', 90) | Out-Null
-$script:profileList.Columns.Add('Models', 150) | Out-Null
-$script:profileList.Add_DoubleClick({ Invoke-SwitchTo (Get-SelectedProfile) })
-$tabSwitch.Controls.Add($script:profileList)
-
-$script:btnSwitch = New-Object System.Windows.Forms.Button
-$script:btnSwitch.Text = 'Switch to selected'
-$script:btnSwitch.Location = New-Object System.Drawing.Point(592, 44)
-$script:btnSwitch.Size = New-Object System.Drawing.Size(244, 34)
-$script:btnSwitch.Add_Click({ Invoke-SwitchTo (Get-SelectedProfile) })
-$tabSwitch.Controls.Add($script:btnSwitch)
-
-$script:btnAdd = New-Object System.Windows.Forms.Button
-$script:btnAdd.Text = 'Add gateway...'
-$script:btnAdd.Location = New-Object System.Drawing.Point(592, 86)
-$script:btnAdd.Size = New-Object System.Drawing.Size(244, 30)
-$script:btnAdd.Add_Click({ Show-ProfileDialog $null })
-$tabSwitch.Controls.Add($script:btnAdd)
-
-$script:btnEdit = New-Object System.Windows.Forms.Button
-$script:btnEdit.Text = 'Edit...'
-$script:btnEdit.Location = New-Object System.Drawing.Point(592, 122)
-$script:btnEdit.Size = New-Object System.Drawing.Size(244, 30)
-$script:btnEdit.Add_Click({ $p = Get-SelectedProfile; if ($p -and $p.kind -ne 'official') { Show-ProfileDialog $p } })
-$tabSwitch.Controls.Add($script:btnEdit)
-
-$script:btnRemove = New-Object System.Windows.Forms.Button
-$script:btnRemove.Text = 'Remove'
-$script:btnRemove.Location = New-Object System.Drawing.Point(592, 158)
-$script:btnRemove.Size = New-Object System.Drawing.Size(244, 30)
-$script:btnRemove.Add_Click({
+# ---------------- events ----------------
+$script:uiNavSwitch.Add_Click({ Set-Page 'switch' })
+$script:uiNavUsage.Add_Click({ Set-Page 'usage' })
+$script:uiNavAbout.Add_Click({ Set-Page 'about' })
+$script:uiBtnSwitch.Add_Click({ Invoke-SwitchTo (Get-SelectedProfile) })
+$script:uiProfileList.Add_MouseDoubleClick({ Invoke-SwitchTo (Get-SelectedProfile) })
+$script:uiBtnAdd.Add_Click({ Show-ProfileDialog $null })
+$script:uiBtnEdit.Add_Click({ $p = Get-SelectedProfile; if ($p -and $p.kind -ne 'official') { Show-ProfileDialog $p } })
+$script:uiBtnRemove.Add_Click({
     $p = Get-SelectedProfile
     if (-not $p -or $p.kind -eq 'official') { return }
-    if ([System.Windows.Forms.MessageBox]::Show("Remove profile '$($p.name)'?", 'Claude Switchboard', 'YesNo') -eq 'Yes') {
+    $r = [System.Windows.MessageBox]::Show("Remove profile '$($p.name)'?", 'Claude Switchboard', 'YesNo')
+    if ($r -eq 'Yes') {
         Remove-Profile $p.id
         Write-Log ('Removed profile: ' + $p.name)
         Refresh-ProfileList
     }
 })
-$tabSwitch.Controls.Add($script:btnRemove)
+$script:uiBtnOpen.Add_Click({ Start-ClaudeDesktop; Write-Log 'Claude launched.' })
+$script:uiBtnRefresh.Add_Click({ Refresh-Usage })
 
-$script:btnOpen = New-Object System.Windows.Forms.Button
-$script:btnOpen.Text = 'Open Claude'
-$script:btnOpen.Location = New-Object System.Drawing.Point(592, 194)
-$script:btnOpen.Size = New-Object System.Drawing.Size(244, 30)
-$script:btnOpen.Add_Click({ Start-ClaudeDesktop; Write-Log 'Claude launched.' })
-$tabSwitch.Controls.Add($script:btnOpen)
-
-$script:chkSync = New-Object System.Windows.Forms.CheckBox
-$script:chkSync.Text = 'Sync sessions and projects before switching (both directions)'
-$script:chkSync.Checked = $true
-$script:chkSync.Location = New-Object System.Drawing.Point(18, 264)
-$script:chkSync.Size = New-Object System.Drawing.Size(560, 24)
-$tabSwitch.Controls.Add($script:chkSync)
-
-$script:chkCode = New-Object System.Windows.Forms.CheckBox
-$script:chkCode.Text = 'Show Code sidebar (projects grouped)'
-$script:chkCode.Checked = $true
-$script:chkCode.Location = New-Object System.Drawing.Point(18, 290)
-$script:chkCode.Size = New-Object System.Drawing.Size(560, 24)
-$tabSwitch.Controls.Add($script:chkCode)
-
-$script:logBox = New-Object System.Windows.Forms.TextBox
-$script:logBox.Multiline = $true
-$script:logBox.ReadOnly = $true
-$script:logBox.ScrollBars = 'Vertical'
-$script:logBox.Font = New-Object System.Drawing.Font('Consolas', 9)
-$script:logBox.Location = New-Object System.Drawing.Point(18, 322)
-$script:logBox.Size = New-Object System.Drawing.Size(818, 210)
-$script:logBox.Anchor = 'Top,Bottom,Left,Right'
-$script:logBox.BackColor = [System.Drawing.Color]::White
-$tabSwitch.Controls.Add($script:logBox)
-
-# --- Tab 2: usage ---
-$tabUsage = New-Object System.Windows.Forms.TabPage
-$tabUsage.Text = 'Usage'
-$tabUsage.BackColor = [System.Drawing.Color]::FromArgb(250, 249, 246)
-$tabs.TabPages.Add($tabUsage)
-
-$lblDays = New-Object System.Windows.Forms.Label
-$lblDays.Text = 'Range'
-$lblDays.Location = New-Object System.Drawing.Point(16, 16)
-$lblDays.Size = New-Object System.Drawing.Size(48, 22)
-$tabUsage.Controls.Add($lblDays)
-
-$script:cboDays = New-Object System.Windows.Forms.ComboBox
-$script:cboDays.DropDownStyle = 'DropDownList'
-$script:cboDays.Location = New-Object System.Drawing.Point(66, 13)
-$script:cboDays.Size = New-Object System.Drawing.Size(90, 25)
-[void]$script:cboDays.Items.AddRange(@('7', '30'))
-$script:cboDays.SelectedIndex = 0
-$tabUsage.Controls.Add($script:cboDays)
-
-$script:btnRefreshUsage = New-Object System.Windows.Forms.Button
-$script:btnRefreshUsage.Text = 'Refresh'
-$script:btnRefreshUsage.Location = New-Object System.Drawing.Point(166, 12)
-$script:btnRefreshUsage.Size = New-Object System.Drawing.Size(90, 27)
-$script:btnRefreshUsage.Add_Click({ Refresh-Usage })
-$tabUsage.Controls.Add($script:btnRefreshUsage)
-
-$script:usageStatus = New-Object System.Windows.Forms.Label
-$script:usageStatus.Text = 'Not scanned yet.'
-$script:usageStatus.Location = New-Object System.Drawing.Point(270, 16)
-$script:usageStatus.Size = New-Object System.Drawing.Size(560, 22)
-$tabUsage.Controls.Add($script:usageStatus)
-
-$script:usageSummary = New-Object System.Windows.Forms.Label
-$script:usageSummary.Text = 'Local transcripts only; no credentials are read.'
-$script:usageSummary.Location = New-Object System.Drawing.Point(16, 48)
-$script:usageSummary.Size = New-Object System.Drawing.Size(820, 44)
-$script:usageSummary.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Bold)
-$tabUsage.Controls.Add($script:usageSummary)
-
-$lblModels = New-Object System.Windows.Forms.Label
-$lblModels.Text = 'By model'
-$lblModels.Location = New-Object System.Drawing.Point(16, 96)
-$lblModels.Size = New-Object System.Drawing.Size(200, 20)
-$tabUsage.Controls.Add($lblModels)
-
-$script:lvModels = New-Object System.Windows.Forms.ListView
-$script:lvModels.Location = New-Object System.Drawing.Point(16, 118)
-$script:lvModels.Size = New-Object System.Drawing.Size(820, 190)
-$script:lvModels.View = 'Details'
-$script:lvModels.FullRowSelect = $true
-$script:lvModels.Columns.Add('Model', 300) | Out-Null
-$script:lvModels.Columns.Add('Messages', 90) | Out-Null
-$script:lvModels.Columns.Add('Input', 110) | Out-Null
-$script:lvModels.Columns.Add('Output', 110) | Out-Null
-$script:lvModels.Columns.Add('Est. cost (USD)', 140) | Out-Null
-$tabUsage.Controls.Add($script:lvModels)
-
-$lblProjects = New-Object System.Windows.Forms.Label
-$lblProjects.Text = 'By project'
-$lblProjects.Location = New-Object System.Drawing.Point(16, 318)
-$lblProjects.Size = New-Object System.Drawing.Size(200, 20)
-$tabUsage.Controls.Add($lblProjects)
-
-$script:lvProjects = New-Object System.Windows.Forms.ListView
-$script:lvProjects.Location = New-Object System.Drawing.Point(16, 340)
-$script:lvProjects.Size = New-Object System.Drawing.Size(820, 190)
-$script:lvProjects.View = 'Details'
-$script:lvProjects.FullRowSelect = $true
-$script:lvProjects.Columns.Add('Project', 380) | Out-Null
-$script:lvProjects.Columns.Add('Messages', 100) | Out-Null
-$script:lvProjects.Columns.Add('Input', 120) | Out-Null
-$script:lvProjects.Columns.Add('Output', 120) | Out-Null
-$script:lvProjects.Columns.Add('Est. cost (USD)', 140) | Out-Null
-$tabUsage.Controls.Add($script:lvProjects)
-
-# --- Tab 3: about ---
-$tabAbout = New-Object System.Windows.Forms.TabPage
-$tabAbout.Text = 'About'
-$tabAbout.BackColor = [System.Drawing.Color]::FromArgb(250, 249, 246)
-$tabs.TabPages.Add($tabAbout)
-
-$about = New-Object System.Windows.Forms.TextBox
-$about.Multiline = $true
-$about.ReadOnly = $true
-$about.ScrollBars = 'Vertical'
-$about.Dock = 'Fill'
-$about.BorderStyle = 'None'
-$about.BackColor = [System.Drawing.Color]::FromArgb(250, 249, 246)
-$about.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
+# ---------------- about ----------------
 $paths = Get-ClaudeDesktopPaths
-$about.Text = @"
-Claude Switchboard
-
-Switch Claude Desktop between the official claude.ai account (deploymentMode 1p)
-and third-party Anthropic-compatible gateways (deploymentMode 3p), copy session
-cards and projects both ways, and read local token usage from Claude Code
-transcripts.
+$script:uiAboutText.Text = @"
+A Windows GUI for switching Claude Desktop between the official claude.ai account
+and third-party Anthropic-compatible gateways.
 
 How it works
-- Official mode: deploymentMode = "1p" (the OAuth login in %APPDATA%\Claude stays intact).
-- Gateway mode: writes a profile into Claude-3p\configLibrary and sets it as appliedId.
-- Session cards: %APPDATA%\Claude\claude-code-sessions and
-  %LOCALAPPDATA%\Claude-3p\claude-code-sessions; newer files win.
-- Config files are written as UTF-8 without BOM. The app ignores a BOM.
-- Order matters: stop Claude -> sync -> write config -> start Claude.
+  Official mode  deploymentMode = "1p"; the OAuth login in %APPDATA%\Claude stays intact.
+  Gateway mode   writes a profile into Claude-3p\configLibrary and sets appliedId.
+  Sessions       cards in %APPDATA%\Claude\claude-code-sessions and
+                 %LOCALAPPDATA%\Claude-3p\claude-code-sessions; newer files win.
+  Config         written as UTF-8 without BOM; the app ignores a BOM.
+  Order          stop Claude -> sync -> write config -> start Claude.
 
 Paths
-  Config (local):   $($paths.LocalConfig)
-  Config (roaming): $($paths.Roaming3pConfig)
-  Profiles:         $(Get-ProfilesFilePath)
-  Transcripts:      $(Get-TranscriptRoot)
+  Local config   $($paths.LocalConfig)
+  Profiles       $(Get-ProfilesFilePath)
+  Transcripts    $(Get-TranscriptRoot)
 
 Privacy
-API keys are encrypted with Windows DPAPI (CurrentUser) in profiles.json.
-Usage is computed locally; nothing is uploaded.
+  API keys are encrypted with Windows DPAPI (CurrentUser) in profiles.json.
+  Usage is computed locally; nothing is uploaded.
 
 License: MIT
 "@
-$tabAbout.Controls.Add($about)
 
 # ---------------- startup ----------------
+Set-Page 'switch'
 Refresh-ProfileList
 Write-Log 'Ready.'
-if (Get-Command pwsh -ErrorAction SilentlyContinue) { }
-if ($PSVersionTable.PSVersion.Major -lt 7) {
-    Write-Log 'Warning: PowerShell 7 (pwsh) is recommended; 5.1 needs a BOM for this script.'
-}
-[void]$script:form.ShowDialog()
+[void]$script:Window.ShowDialog()

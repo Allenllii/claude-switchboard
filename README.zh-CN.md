@@ -52,18 +52,25 @@ pwsh -File .\Install-Shortcut.ps1
 | Name | `我的中转 · Sonnet 5.5` |
 | Base URL | `https://relay.example.com`（提供 `/v1/messages` 的地址） |
 | API key | `sk-…`（DPAPI 加密保存） |
-| Models | 每行一个：`id \| 显示名 \| 档位 \| 1m` |
+| Models | 每行一个：`id \| 显示名 \| 档位` |
 
 模型行示例：
 
 ```
-claude-opus-5-5 | Claude Opus 5.5 | opus | 1m
-claude-sonnet-5-5 | Claude Sonnet 5.5 | sonnet | 1m
-claude-haiku-5-5 | Claude Haiku 5.5 | haiku | 1m
-claude-fable-5-2 | Claude Fable 5.2 | fable | 1m
+claude-opus-5-5 | Claude Opus 5.5 | opus
+claude-sonnet-5-5 | Claude Sonnet 5.5 | sonnet
+claude-haiku-5-5 | Claude Haiku 5.5 | haiku
+claude-fable-5-2 | Claude Fable 5.2 | fable
 ```
 
-`档位` 对应 Claude Code 的 Opus/Sonnet/Haiku/Fable 槽位；`1m` 表示 `supports1m`。
+`档位` 可选，对应 Claude Code 的 Opus/Sonnet/Haiku 槽位。
+
+**1M 变体默认关闭**，模型菜单里每个型号只出现一次。只有当网关确实提供 1M 上下文、
+并且你想要那个额外入口时，才加第四段 `| 1m`：
+
+```
+claude-opus-5-5 | Claude Opus 5.5 | opus | 1m
+```
 
 ## 实现要点
 

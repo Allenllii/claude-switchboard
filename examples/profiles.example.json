@@ -16,10 +16,10 @@
       "baseUrl": "https://relay.example.com",
       "apiKeyEnc": "",
       "models": [
-        { "id": "claude-opus-5-5", "label": "Claude Opus 5.5", "tier": "opus", "supports1m": true },
-        { "id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5", "tier": "sonnet", "supports1m": true },
-        { "id": "claude-haiku-5-5", "label": "Claude Haiku 5.5", "tier": "haiku", "supports1m": true },
-        { "id": "claude-fable-5-2", "label": "Claude Fable 5.2", "tier": "fable", "supports1m": true }
+        { "id": "claude-opus-5-5", "label": "Claude Opus 5.5", "tier": "opus", "supports1m": false },
+        { "id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5", "tier": "sonnet", "supports1m": false },
+        { "id": "claude-haiku-5-5", "label": "Claude Haiku 5.5", "tier": "haiku", "supports1m": false },
+        { "id": "claude-fable-5-2", "label": "Claude Fable 5.2", "tier": "fable", "supports1m": false }
       ],
       "notes": "Replace apiKeyEnc by adding the profile in the app (DPAPI-encrypted)."
     }

@@ -59,19 +59,26 @@ Click **Add gateway…** and fill in:
 | Name | `My relay · Sonnet 5.5` |
 | Base URL | `https://relay.example.com` (the host that serves `/v1/messages`) |
 | API key | `sk-…` (stored with DPAPI) |
-| Models | one per line: `id \| label \| tier \| 1m` |
+| Models | one per line: `id \| label \| tier` |
 
 Example model lines:
 
 ```
-claude-opus-5-5 | Claude Opus 5.5 | opus | 1m
-claude-sonnet-5-5 | Claude Sonnet 5.5 | sonnet | 1m
-claude-haiku-5-5 | Claude Haiku 5.5 | haiku | 1m
-claude-fable-5-2 | Claude Fable 5.2 | fable | 1m
+claude-opus-5-5 | Claude Opus 5.5 | opus
+claude-sonnet-5-5 | Claude Sonnet 5.5 | sonnet
+claude-haiku-5-5 | Claude Haiku 5.5 | haiku
+claude-fable-5-2 | Claude Fable 5.2 | fable
 ```
 
-`tier` is what Claude Code uses for its Opus/Sonnet/Haiku/Fable slots; `1m` sets
-`supports1m`.
+`tier` is what Claude Code uses for its Opus/Sonnet/Haiku slots (optional).
+
+**1M variants are off by default**, so the model picker shows one entry per model.
+Append a fourth field only if the gateway really serves a 1M-context variant and you
+want the extra entry:
+
+```
+claude-opus-5-5 | Claude Opus 5.5 | opus | 1m
+```
 
 ## How it works
 

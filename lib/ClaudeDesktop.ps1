@@ -125,9 +125,11 @@ function Write-GatewayProfile($paths, $profile, [string]$plainKey) {
         $entry = [ordered]@{
             name          = $m.id
             labelOverride = if ($m.label) { $m.label } else { $m.id }
-            supports1m    = [bool]$m.supports1m
         }
-        if ($m.tier) { $entry['anthropicFamilyTier'] = $m.tier }
+        if ($m.supports1m -eq $true) { $entry['supports1m'] = $true }
+        if ($m.tier -and $m.tier -in @('opus', 'sonnet', 'haiku')) {
+            $entry['anthropicFamilyTier'] = $m.tier
+        }
         $models += [pscustomobject]$entry
     }
     $config = [ordered]@{

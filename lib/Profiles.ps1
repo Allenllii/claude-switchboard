@@ -129,7 +129,8 @@ function Set-ActiveProfile([string]$id) {
 }
 
 function ConvertFrom-ModelText([string]$text) {
-    # One model per line: id | label | tier (opus/sonnet/haiku/fable) | 1m
+    # One model per line: id | label | tier (opus/sonnet/haiku/fable) [| 1m]
+    # The 1M flag is off by default so the desktop picker shows one entry per model.
     $list = @()
     foreach ($line in ($text -split "`r?`n")) {
         $t = $line.Trim()
@@ -138,10 +139,10 @@ function ConvertFrom-ModelText([string]$text) {
         $id = $parts[0]
         if (-not $id) { continue }
         $list += [pscustomobject]@{
-            id        = $id
-            label     = if ($parts.Count -gt 1 -and $parts[1]) { $parts[1] } else { $id }
-            tier      = if ($parts.Count -gt 2) { $parts[2].ToLower() } else { '' }
-            supports1m = if ($parts.Count -gt 3) { $parts[3] -eq '1m' } else { $true }
+            id         = $id
+            label      = if ($parts.Count -gt 1 -and $parts[1]) { $parts[1] } else { $id }
+            tier       = if ($parts.Count -gt 2) { $parts[2].ToLower() } else { '' }
+            supports1m = if ($parts.Count -gt 3) { $parts[3] -eq '1m' } else { $false }
         }
     }
     return $list
@@ -150,16 +151,18 @@ function ConvertFrom-ModelText([string]$text) {
 function ConvertTo-ModelText($models) {
     $lines = @()
     foreach ($m in @($models)) {
-        $lines += ('{0} | {1} | {2} | {3}' -f $m.id, $m.label, $m.tier, $(if ($m.supports1m) { '1m' } else { '' })).TrimEnd(' |')
+        $line = ('{0} | {1} | {2}' -f $m.id, $m.label, $m.tier)
+        if ($m.supports1m) { $line += ' | 1m' }
+        $lines += $line
     }
     return ($lines -join "`r`n")
 }
 
 function Get-DefaultClaudeModels {
     return @(
-        [pscustomobject]@{ id = 'claude-opus-5-5'; label = 'Claude Opus 5.5'; tier = 'opus'; supports1m = $true }
-        [pscustomobject]@{ id = 'claude-sonnet-5-5'; label = 'Claude Sonnet 5.5'; tier = 'sonnet'; supports1m = $true }
-        [pscustomobject]@{ id = 'claude-haiku-5-5'; label = 'Claude Haiku 5.5'; tier = 'haiku'; supports1m = $true }
-        [pscustomobject]@{ id = 'claude-fable-5-2'; label = 'Claude Fable 5.2'; tier = 'fable'; supports1m = $true }
+        [pscustomobject]@{ id = 'claude-opus-5-5'; label = 'Claude Opus 5.5'; tier = 'opus'; supports1m = $false }
+        [pscustomobject]@{ id = 'claude-sonnet-5-5'; label = 'Claude Sonnet 5.5'; tier = 'sonnet'; supports1m = $false }
+        [pscustomobject]@{ id = 'claude-haiku-5-5'; label = 'Claude Haiku 5.5'; tier = 'haiku'; supports1m = $false }
+        [pscustomobject]@{ id = 'claude-fable-5-2'; label = 'Claude Fable 5.2'; tier = 'fable'; supports1m = $false }
     )
 }

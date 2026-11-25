@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-11-25
+
+- New WPF interface: dark sidebar navigation, profile cards with kind badges and an
+  active marker, status pill, summary cards and tables on the usage page.
+- 1M-context variants are off by default, so the model picker shows a single entry per
+  model. A model can opt in with a fourth `| 1m` field.
+- `anthropicFamilyTier` is written only for the valid `opus`/`sonnet`/`haiku` slots.
+- Existing profiles are migrated to the single-entry model list.
+
 ## 0.1.0 — 2026-11-25
 
 - Initial release.
