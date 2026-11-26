@@ -1059,14 +1059,24 @@ function Show-ProfileMenu($anchor) {
 $script:uiProfileList.AddHandler([System.Windows.Controls.Button]::ClickEvent,
     [System.Windows.RoutedEventHandler]{
         param($s, $e)
-        $btn = $e.Source
-        if (-not $btn -or -not $btn.Tag) { return }
-        if ($btn.Name -eq 'RowMenu') {
-            Show-ProfileMenu $btn
+        # Routed through the ItemsControl: Source is the list, the real button is OriginalSource.
+        $node = $e.OriginalSource
+        while ($node -and -not ($node -is [System.Windows.Controls.Button])) {
+            if ($node -is [System.Windows.Media.Visual]) {
+                $node = [System.Windows.Media.VisualTreeHelper]::GetParent($node)
+            } elseif ($node -is [System.Windows.FrameworkContentElement]) {
+                $node = $node.Parent
+            } else {
+                $node = $null
+            }
+        }
+        if (-not $node -or -not $node.Tag) { return }
+        if ($node.Name -eq 'RowMenu') {
+            Show-ProfileMenu $node
             return
         }
         if ($script:Busy) { return }
-        $target = Get-ProfileById $script:ProfilesDoc ([string]$btn.Tag)
+        $target = Get-ProfileById $script:ProfilesDoc ([string]$node.Tag)
         if ($target -and $target.id -ne $script:ProfilesDoc.activeProfileId) {
             Invoke-SwitchTo $target
         }

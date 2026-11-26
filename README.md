@@ -102,6 +102,14 @@ Two details matter:
 2. **Encoding**: config JSON must be UTF-8 **without BOM**. A BOM makes the app ignore
    the file and silently keep the previous mode.
 
+## Privacy
+
+Everything stays on this machine. Gateway profiles, including the DPAPI-encrypted API
+key, live in `%LOCALAPPDATA%\ClaudeSwitchboard\profiles.json` — outside the repository.
+That file, logs and scan output are excluded by `.gitignore` in case a copy lands in the
+project folder. Session cards and Claude Code transcripts are read locally; the app makes
+no network calls except to the gateway you configure.
+
 ## Usage dashboard
 
 The Usage tab reads local Claude Code transcripts. It shows totals for 7 or 30 days,

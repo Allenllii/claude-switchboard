@@ -15,6 +15,8 @@
   switch page shows only the latest line.
 - Add/edit gateway dialog rebuilt as a dark 560×680 form with the app icon, dark
   scrollbars and the orange save button. API keys remain DPAPI-encrypted.
+- Fixed profile-row clicks: the Click event is routed through the items list, so the
+  handler now resolves the actual row button from `OriginalSource` before switching.
 - Dark DWM title bar and rounded window corners; popup menus use the app palette.
 - Tab pages reset to the top when opened.
 
